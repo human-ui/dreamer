@@ -6,11 +6,9 @@ import os
 import pathlib
 import sys
 import time
-import mlflow
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['MUJOCO_GL'] = 'egl'
-os.environ['GOOGLE_APPLICATION_CREDENTIALS']='./gcs-credentials.json'
 
 import numpy as np
 import tensorflow as tf
@@ -298,7 +296,7 @@ class Dreamer(tools.Module):
     self._metrics['value_loss'].update_state(value_loss)
     self._metrics['actor_loss'].update_state(actor_loss)
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
-  
+
   def _image_summaries(self, data, embed, image_pred):
     truth = data['image'][:6] + 0.5
     recon = image_pred.mode()[:6]
@@ -310,7 +308,7 @@ class Dreamer(tools.Module):
     error = (model - truth + 1) / 2
     openl = tf.concat([truth, model, error], 2)
     tools.graph_summary(
-        self._writer, tools.video_summary, 'agent/openl', openl, str(self._c.logdir), self._step if self._step is not None else 0)
+        self._writer, tools.video_summary, 'agent/openl', openl)
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -326,10 +324,6 @@ class Dreamer(tools.Module):
     [tf.summary.scalar('agent/' + k, m) for k, m in metrics]
     print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
     self._writer.flush()
-
-    metrics = {key : val for key, val in metrics}
-    mlflow.log_metrics(metrics, step = step)
-
 
 
 def preprocess(obs, config):
@@ -376,11 +370,7 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test':
-      tools.video_summary(f'sim/{prefix}/video', episode['image'][None], str(config.logdir), tf.summary.experimental.get_step())
-  
-  tf.numpy_function(lambda met, st : mlflow.log_metrics({key : val for key, val in metrics}, step = int(st)), [metrics, step], [])
-  #metrics = {key : val for key, val in metrics}
-  #mlflow.log_metrics(metrics, step = step)
+      tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
 
 
 def make_env(config, writer, prefix, datadir, store):
@@ -394,19 +384,12 @@ def make_env(config, writer, prefix, datadir, store):
         task, config.action_repeat, (64, 64), grayscale=False,
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
-  elif suite == 'procgen':
-    env = wrappers.Procgen(task, config.action_repeat)
-    env = wrappers.OneHotAction(env)
-  elif suite == 'gymcont':
-    env = wrappers.GymCont(task)
-    env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.NormalizeActions(env)
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
   callbacks = []
   if store:
-    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep], config.batch_length))
+    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
   callbacks.append(
       lambda ep: summarize_episode(ep, config, datadir, writer, prefix))
   env = wrappers.Collect(env, callbacks, config.precision)
@@ -477,6 +460,4 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   for key, value in define_config().items():
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
-  mlflow.set_tracking_uri('http://mlflow.threethirds.ai')
-  with mlflow.start_run(experiment_id = '16', run_name = 'dreamer' + str(time.time())):
-    main(parser.parse_args())
+  main(parser.parse_args())

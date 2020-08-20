@@ -26,8 +26,6 @@ class Module(tf.Module):
     values = tf.nest.map_structure(lambda x: x.numpy(), self.variables)
     with pathlib.Path(filename).open('wb') as f:
       pickle.dump(values, f)
-    import mlflow
-    mlflow.log_artifact(filename)
 
   def load(self, filename):
     with pathlib.Path(filename).open('rb') as f:
@@ -54,60 +52,30 @@ def nest_summary(structure):
 
 
 def graph_summary(writer, fn, *args):
-  #step = tf.summary.experimental.get_step()
+  step = tf.summary.experimental.get_step()
   def inner(*args):
-    #tf.summary.experimental.set_step(step)
+    tf.summary.experimental.set_step(step)
     with writer.as_default():
       fn(*args)
-  
   return tf.numpy_function(inner, args, [])
 
 
-def video_summary(name, video, logpath, step, fps=20):
-  #print(f'step {tf.summary.experimental.get_step()}')
-  if step is None:
-    step = 0
-  #print(step)
-  video = np.clip(255 * video, 0, 255).astype(np.uint8)
-  #print(type(logpath))
-  
-  if isinstance(logpath, str):
-    gifdir = pathlib.Path(logpath) / 'gifs' / 'simulation'
-  else:
-    gifdir = pathlib.Path(str(logpath, 'utf-8')) / 'gifs' / 'comparison'
-  gifdir.mkdir(parents=True, exist_ok=True)
-
-  import imageio
-  import mlflow
-
-  counter = 1
-  for seq in video:
-    curdir = gifdir / (str(step) + '-' + str(counter) + '.gif')
-    imageio.mimwrite(curdir, seq, fps = fps)
-    counter += 1
-  mlflow.log_artifact(gifdir)
-
-  #writer = imageio.get_writer(str(gifdir) + '/' + str(step) + '.gif', mode = 'I', fps = fps)
-  #print(tf.shape(video))
-  #for im in video:
-  #    writer.append_data(im)
-  #writer.close()
-
-  #name = name if isinstance(name, str) else name.decode('utf-8')
-  #if np.issubdtype(video.dtype, np.floating):
-  #  video = np.clip(255 * video, 0, 255).astype(np.uint8)
-  #B, T, H, W, C = video.shape
-  #try:
-  #  frames = video.transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
-  #  summary = tf1.Summary()
-  #  image = tf1.Summary.Image(height=B * H, width=T * W, colorspace=C)
-  #  image.encoded_image_string = encode_gif(frames, fps)
-  #  summary.value.add(tag=name + '/gif', image=image)
-  #  tf.summary.experimental.write_raw_pb(summary.SerializeToString(), step)
-  #except (IOError, OSError) as e:
-  #  print('GIF summaries require ffmpeg in $PATH.', e)
-  #  frames = video.transpose((0, 2, 1, 3, 4)).reshape((1, B * H, T * W, C))
-  #  tf.summary.image(name + '/grid', frames, step)
+def video_summary(name, video, step=None, fps=20):
+  name = name if isinstance(name, str) else name.decode('utf-8')
+  if np.issubdtype(video.dtype, np.floating):
+    video = np.clip(255 * video, 0, 255).astype(np.uint8)
+  B, T, H, W, C = video.shape
+  try:
+    frames = video.transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
+    summary = tf1.Summary()
+    image = tf1.Summary.Image(height=B * H, width=T * W, colorspace=C)
+    image.encoded_image_string = encode_gif(frames, fps)
+    summary.value.add(tag=name + '/gif', image=image)
+    tf.summary.experimental.write_raw_pb(summary.SerializeToString(), step)
+  except (IOError, OSError) as e:
+    print('GIF summaries require ffmpeg in $PATH.', e)
+    frames = video.transpose((0, 2, 1, 3, 4)).reshape((1, B * H, T * W, C))
+    tf.summary.image(name + '/grid', frames, step)
 
 
 def encode_gif(frames, fps):
@@ -171,15 +139,13 @@ def count_episodes(directory):
   return episodes, steps
 
 
-def save_episodes(directory, episodes, batch_length):
+def save_episodes(directory, episodes):
   directory = pathlib.Path(directory).expanduser()
   directory.mkdir(parents=True, exist_ok=True)
   timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
   for episode in episodes:
     identifier = str(uuid.uuid4().hex)
     length = len(episode['reward'])
-    if length < batch_length:
-      continue
     filename = directory / f'{timestamp}-{identifier}-{length}.npz'
     with io.BytesIO() as f1:
       np.savez_compressed(f1, **episode)
@@ -192,7 +158,6 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
   directory = pathlib.Path(directory).expanduser()
   random = np.random.RandomState(seed)
   cache = {}
-  totals = {}
   while True:
     for filename in directory.glob('*.npz'):
       if filename not in cache:
@@ -204,25 +169,17 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
           print(f'Could not load episode: {e}')
           continue
         cache[filename] = episode
-        if length:
-          totals[filename] = len(episode['reward'])
-    
     keys = list(cache.keys())
-    if length:
-      totals_vals = np.array(list(totals.values()))
-      probs = totals_vals / totals_vals.sum()
-      del totals_vals
-    else:
-      probs = None
-    for index in random.choice(len(keys), rescan, p = probs):
+    for index in random.choice(len(keys), rescan):
       episode = cache[keys[index]]
       if length:
-        available = totals[keys[index]] - length + 1
+        total = len(next(iter(episode.values())))
+        available = total - length
         if available < 1:
           print(f'Skipped short episode of length {available}.')
           continue
         if balance:
-          index = min(random.randint(0, total), available - 1)
+          index = min(random.randint(0, total), available)
         else:
           index = int(random.randint(0, available))
         episode = {k: v[index: index + length] for k, v in episode.items()}

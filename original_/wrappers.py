@@ -9,77 +9,6 @@ import numpy as np
 from PIL import Image
 
 
-class Procgen:
-    LOCK = threading.Lock()
-
-    def __init__(self, name, action_repeat = 4, distribution_mode = 'easy', use_backgrounds = False):
-        with self.LOCK:
-            self._env = gym.make('procgen:procgen-' + name + '-v0', distribution_mode = distribution_mode, use_backgrounds = use_backgrounds)
-        self._action_repeat = action_repeat
-        self._size = (64, 64)
-        self._random = np.random.RandomState(seed=None)
-
-    @property
-    def observation_space(self):
-        shape = self._size + (3,)
-        space = gym.spaces.Box(low = 0, high = 255, shape = shape, dtype = np.uint8)
-        return gym.spaces.Dict({'image' : space})
-
-    @property
-    def action_space(self):
-        return self._env.action_space
-
-    def close(self):
-        return self._env.close()
-
-    def reset(self):
-        with self.LOCK:
-            obs = self._env.reset()
-        return {'image' : obs}
-    
-    def step(self, action):
-        total_reward = 0.0
-        for step in range(self._action_repeat):
-            obs, reward, done, info = self._env.step(action)
-            total_reward += reward
-            if done:
-                break
-        return {'image' : obs}, total_reward, done, info
-
-    def render(self, mode):
-        return self._env.render()
-
-class GymCont:
-  def __init__(self, name):
-    self._env = gym.make(name + '-v0')
-    self._size = (64, 64)
-
-  @property
-  def observation_space(self):
-    shape = self._size + (3,)
-    space = gym.spaces.Box(low = 0, high = 255, shape = shape, dtype = np.uint8)
-    return gym.spaces.Dict({'image' : space})
-
-  @property
-  def action_space(self):
-    return self._env.action_space
-
-  def step(self, action):
-    obs, reward, done, info = self._env.step(action)
-    obs = self._get_obs(obs)
-    return obs, reward, done, info
-
-  def reset(self):
-    obs = self._env.reset()
-    obs = self._get_obs(obs)
-    return obs
-
-  def render(self, *args, **kwargs):
-    return self._env.render()
-
-  def _get_obs(self, obs):
-    return {'image' : obs[:64, :64]}
-
 class DeepMindControl:
 
   def __init__(self, name, size=(64, 64), camera=None):
@@ -545,4 +474,3 @@ class Async:
       print(f'Error in environment process: {stacktrace}')
       conn.send((self._EXCEPTION, stacktrace))
     conn.close()
-
