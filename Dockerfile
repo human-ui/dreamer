@@ -68,9 +68,10 @@ RUN pip install gym
 RUN pip install procgen
 RUN pip install mlflow
 RUN pip install imageio
-RUN pip install tensorflow==2.3 # maybe tenforflow-gpu later
+RUN pip install tensorflow-gpu==2.3 # maybe tenforflow-gpu later
 RUN pip install tensorflow_probability
 RUN pip install google.cloud.storage
+RUN pip install gym[atari]
 
 # RUN pip install torch==1.6.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 # RUN pip install tensorflow==2.2.0

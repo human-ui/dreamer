@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "puksta4"
+  namespace: default
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      volumes:
+        - name: google-cloud-key
+          secret:
+            secretName: mlflow-worker-key
+      containers:
+        - name: dreamer
+          image: eu.gcr.io/human-ui/dreamer:puksta4
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.threethirds.ai
+          volumeMounts:
+            - name: google-cloud-key
+              mountPath: /var/secrets/google
+          command: ["python"]
+          args:
+            [
+              "dreamer.py",
+              "--task",
+              "atari_kung_fu_master",
+              "--time_limit",
+              "1e6",
+              "--deter_size",
+              "400",
+              "--stoch_size",
+              "60",
+              "--pcont",
+              "True",
+              "--kl_scale",
+              "0.1",
+              "--horizon",
+              "10",
+              "--action_dist",
+              "onehot",
+              "--expl",
+              "epsilon_greedy",
+              "--expl_amount",
+              "0.4",
+              "--expl_decay",
+              "1000000.0",
+              "--expl_min",
+              "0.1",
+              "--num_units",
+              "300",
+	      "--prefill",
+	      "100000",
+              "--steps",
+              "1e6",
+	      "--action_repeat",
+	      "2",
+            ]
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+            requests:
+              memory: 16000Mi
+              cpu: 3000m
+              nvidia.com/gpu: 1
+      restartPolicy: Never

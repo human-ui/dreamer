@@ -64,21 +64,23 @@ def graph_summary(writer, fn, *args):
 
 
 def video_summary(name, video, logpath, step, fps=20):
-  #print(f'step {tf.summary.experimental.get_step()}')
+  import os
+  import shutil
+  import imageio
+  import mlflow
+  
   if step is None:
     step = 0
-  #print(step)
   video = np.clip(255 * video, 0, 255).astype(np.uint8)
-  #print(type(logpath))
   
   if isinstance(logpath, str):
     gifdir = pathlib.Path(logpath) / 'gifs' / 'simulation'
   else:
     gifdir = pathlib.Path(str(logpath, 'utf-8')) / 'gifs' / 'comparison'
+  
+  if gifdir.is_dir():
+    shutil.rmtree(gifdir)
   gifdir.mkdir(parents=True, exist_ok=True)
-
-  import imageio
-  import mlflow
 
   counter = 1
   for seq in video:

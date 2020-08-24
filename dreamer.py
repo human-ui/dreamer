@@ -478,5 +478,6 @@ if __name__ == '__main__':
   for key, value in define_config().items():
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
   mlflow.set_tracking_uri('http://mlflow.threethirds.ai')
-  with mlflow.start_run(experiment_id = '16', run_name = 'dreamer' + str(time.time())):
-    main(parser.parse_args())
+  config = parser.parse_args()
+  with mlflow.start_run(experiment_id = '16', run_name = 'dreamer_' + config.task + str(time.time())):
+    main(config)
