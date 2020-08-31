@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: "puksta4"
+  name: "puksta1"
   namespace: default
 spec:
   backoffLimit: 4
@@ -13,7 +13,7 @@ spec:
             secretName: mlflow-worker-key
       containers:
         - name: dreamer
-          image: eu.gcr.io/human-ui/dreamer:puksta4
+          image: eu.gcr.io/human-ui/dreamer:puksta1
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /var/secrets/google/key.json
@@ -27,13 +27,17 @@ spec:
             [
               "dreamer.py",
               "--task",
-              "atari_kung_fu_master",
+              "atari_breakout",
+              "--dataset_balance",
+              "True",
+              "--train_steps",
+              "100",
               "--time_limit",
-              "1e6",
+              "2e3",
               "--deter_size",
-              "400",
+              "200",
               "--stoch_size",
-              "60",
+              "30",
               "--pcont",
               "True",
               "--kl_scale",
@@ -47,17 +51,15 @@ spec:
               "--expl_amount",
               "0.4",
               "--expl_decay",
-              "1000000.0",
+              "100000.0",
               "--expl_min",
               "0.1",
               "--num_units",
               "300",
-	      "--prefill",
-	      "100000",
               "--steps",
               "1e6",
-	      "--action_repeat",
-	      "2",
+              "--action_repeat",
+              "2",
             ]
           resources:
             limits:

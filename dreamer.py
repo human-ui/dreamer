@@ -58,6 +58,7 @@ def define_config():
   config.pcont = False
   config.free_nats = 3.0
   config.kl_scale = 1.0
+  config.reward_scale = 10.0
   config.pcont_scale = 10.0
   config.weight_decay = 0.0
   config.weight_decay_pattern = r'.*'
@@ -166,6 +167,7 @@ class Dreamer(tools.Module):
       likes = tools.AttrDict()
       likes.image = tf.reduce_mean(image_pred.log_prob(data['image']))
       likes.reward = tf.reduce_mean(reward_pred.log_prob(data['reward']))
+      likes.reward *= self._c.reward_scale
       if self._c.pcont:
         pcont_pred = self._pcont(feat)
         pcont_target = self._c.discount * data['discount']
@@ -209,7 +211,9 @@ class Dreamer(tools.Module):
         self._scalar_summaries(
             data, feat, prior_dist, post_dist, likes, div,
             model_loss, value_loss, actor_loss, model_norm, value_norm,
-            actor_norm)
+            actor_norm,
+            image_pred, reward_pred, pcont_pred, value_pred,
+            data['image'], data['reward'], pcont_target, target, discount)
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
 
@@ -285,7 +289,9 @@ class Dreamer(tools.Module):
   def _scalar_summaries(
       self, data, feat, prior_dist, post_dist, likes, div,
       model_loss, value_loss, actor_loss, model_norm, value_norm,
-      actor_norm):
+      actor_norm,
+      image_pred, reward_pred, pcont_pred, value_pred,
+      image_data, reward_data, pcont_data, value_target, value_discount):
     self._metrics['model_grad_norm'].update_state(model_norm)
     self._metrics['value_grad_norm'].update_state(value_norm)
     self._metrics['actor_grad_norm'].update_state(actor_norm)
@@ -298,6 +304,27 @@ class Dreamer(tools.Module):
     self._metrics['value_loss'].update_state(value_loss)
     self._metrics['actor_loss'].update_state(actor_loss)
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
+    image_pred_mean = image_pred.mean()
+    image_pred_abserr = tf.abs(image_data - image_pred_mean)
+    self._metrics['image_mean'].update_state(tf.reduce_mean(image_data))
+    self._metrics['image_pred_mean'].update_state(tf.reduce_mean(image_pred_mean))
+    self._metrics['image_pred_abserr'].update_state(tf.reduce_mean(image_pred_abserr))
+    reward_pred_mean = reward_pred.mean()
+    reward_pred_abserr = tf.abs(reward_data - reward_pred_mean)
+    self._metrics['reward_mean'].update_state(tf.reduce_mean(reward_data))
+    self._metrics['reward_pred_mean'].update_state(tf.reduce_mean(reward_pred_mean))
+    self._metrics['reward_pred_abserr'].update_state(tf.reduce_mean(reward_pred_abserr))
+    value_pred_mean = value_pred.mean()
+    value_pred_abserr = tf.abs(value_target - value_pred_mean)
+    self._metrics['value_mean'].update_state(tf.reduce_mean(value_discount * value_target))
+    self._metrics['value_pred_mean'].update_state(tf.reduce_mean(value_discount * value_pred_mean))
+    self._metrics['value_pred_abserr'].update_state(tf.reduce_mean(value_discount * value_pred_abserr))
+    if pcont_pred is not None:
+      pcont_pred_mean = pcont_pred.mean()
+      pcont_pred_abserr = tf.abs(pcont_data - pcont_pred_mean)
+      self._metrics['pcont_mean'].update_state(tf.reduce_mean(pcont_data))
+      self._metrics['pcont_pred_mean'].update_state(tf.reduce_mean(pcont_pred_mean))
+      self._metrics['pcont_pred_abserr'].update_state(tf.reduce_mean(pcont_pred_abserr))
   
   def _image_summaries(self, data, embed, image_pred):
     truth = data['image'][:6] + 0.5
@@ -469,6 +496,9 @@ def main(config):
 
 
 if __name__ == '__main__':
+  gpu_devices = tf.config.list_physical_devices('GPU')
+  print(f'GPU devices: {gpu_devices}')
+  assert len(gpu_devices) > 0, "Need GPU"
   try:
     import colored_traceback
     colored_traceback.add_hook()
@@ -477,7 +507,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   for key, value in define_config().items():
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
-  mlflow.set_tracking_uri('http://mlflow.threethirds.ai')
   config = parser.parse_args()
+  mlflow.set_tracking_uri('http://mlflow.threethirds.ai')
   with mlflow.start_run(experiment_id = '16', run_name = 'dreamer_' + config.task + str(time.time())):
     main(config)

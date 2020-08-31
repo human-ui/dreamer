@@ -219,7 +219,8 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
     for index in random.choice(len(keys), rescan, p = probs):
       episode = cache[keys[index]]
       if length:
-        available = totals[keys[index]] - length + 1
+        total = totals[keys[index]]
+        available = total - length + 1
         if available < 1:
           print(f'Skipped short episode of length {available}.')
           continue

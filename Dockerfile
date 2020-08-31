@@ -61,7 +61,6 @@ RUN wget -nv -O miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-py37
 ENV PATH ${CONDA_DIR}/bin:${PATH}
 
 RUN pip install pip --upgrade
-#RUN pip install numpy
 RUN pip install pandas
 RUN pip install matplotlib
 RUN pip install gym
@@ -72,15 +71,6 @@ RUN pip install tensorflow-gpu==2.3 # maybe tenforflow-gpu later
 RUN pip install tensorflow_probability
 RUN pip install google.cloud.storage
 RUN pip install gym[atari]
-
-# RUN pip install torch==1.6.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
-# RUN pip install tensorflow==2.2.0
-# This is needed in order to install dependencies for Ray
-# RUN pip install ray[rllib]==0.8.6
-# RUN pip install -U https://s3-us-west-2.amazonaws.com/ray-wheels/master/ef190f358bbc142275c1ea6b6f114fa30d33c541/ray-0.9.0.dev0-cp37-cp37m-manylinux1_x86_64.whl
-
-# COPY requirements.txt ${HOME_DIR}
-# RUN pip install -r requirements.txt
 
 # Flush Python stdout immediately, so it appears in Kubernetes logs
 ENV PYTHONUNBUFFERED 1
